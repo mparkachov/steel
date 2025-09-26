@@ -15,5 +15,5 @@ pub mod tokens;
 pub mod tryfrom_visitor;
 pub mod visitors;
 
-#[cfg(test)]
+#[cfg(all(test, not(target_family = "wasm")))]
 mod prop;

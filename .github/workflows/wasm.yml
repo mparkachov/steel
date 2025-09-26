@@ -1,0 +1,35 @@
+name: Wasm32 Steel Core
+
+on:
+  push:
+    branches:
+      - mwp-wasm-bindgen-test
+
+jobs:
+  steel-core-wasm:
+    name: steel-core wasm build and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Add wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install wasm-bindgen CLI
+        run: cargo install wasm-bindgen-cli --locked
+
+      - name: Build steel-core for wasm32-unknown-unknown
+        run: cargo build -p steel-core --target wasm32-unknown-unknown
+
+      - name: Run steel-core wasm tests
+        env:
+          CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: wasm-bindgen-test-runner
+        run: cargo test -p steel-core --target wasm32-unknown-unknown
