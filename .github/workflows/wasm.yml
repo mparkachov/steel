@@ -29,6 +29,4 @@ jobs:
         run: cargo build -p steel-core --target wasm32-unknown-unknown
 
       - name: Run steel-core wasm tests
-        env:
-          CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: wasm-bindgen-test-runner
         run: cargo test -p steel-core --target wasm32-unknown-unknown
