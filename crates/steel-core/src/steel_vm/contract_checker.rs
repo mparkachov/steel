@@ -445,25 +445,30 @@ impl TypeInfo {
     }
 }
 
-#[test]
-fn test_list_composition() {
-    let left = TypeInfo::ListOf(Box::new(TypeInfo::UnionOf(
-        vec![TypeInfo::Any].into_iter().collect(),
-    )));
+#[cfg(all(test, feature = "std"))]
+mod contract_checker_tests {
+    use super::TypeInfo;
 
-    let right = TypeInfo::ListOf(Box::new(TypeInfo::UnionOf(
-        vec![TypeInfo::Any, TypeInfo::String].into_iter().collect(),
-    )));
+    #[test]
+    fn test_list_composition() {
+        let left = TypeInfo::ListOf(Box::new(TypeInfo::UnionOf(
+            vec![TypeInfo::Any].into_iter().collect(),
+        )));
 
-    println!("{}", left.is_compatible_with(&right));
+        let right = TypeInfo::ListOf(Box::new(TypeInfo::UnionOf(
+            vec![TypeInfo::Any, TypeInfo::String].into_iter().collect(),
+        )));
 
-    let left = TypeInfo::ListOf(Box::new(TypeInfo::String));
+        println!("{}", left.is_compatible_with(&right));
 
-    let right = TypeInfo::ListOf(Box::new(TypeInfo::UnionOf(
-        vec![TypeInfo::Any, TypeInfo::String].into_iter().collect(),
-    )));
+        let left = TypeInfo::ListOf(Box::new(TypeInfo::String));
 
-    println!("{}", left.is_compatible_with(&right));
+        let right = TypeInfo::ListOf(Box::new(TypeInfo::UnionOf(
+            vec![TypeInfo::Any, TypeInfo::String].into_iter().collect(),
+        )));
+
+        println!("{}", left.is_compatible_with(&right));
+    }
 }
 
 impl<'a> VisitorMut for ContractChecker<'a> {

@@ -746,7 +746,10 @@ impl<T: IntoFFIVal + Clone, V: IntoFFIVal + Clone> IntoFFIVal for crate::values:
         let mut output = RHashMap::with_capacity(map.len());
 
         for (key, value) in map.iter() {
-            output.insert(ffi_try!(key.clone().into_ffi_val()), ffi_try!(value.clone().into_ffi_val()));
+            output.insert(
+                ffi_try!(key.clone().into_ffi_val()),
+                ffi_try!(value.clone().into_ffi_val()),
+            );
         }
 
         RResult::ROk(FFIValue::HashMap(output))

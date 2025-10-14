@@ -186,7 +186,10 @@ impl MarkdownEvent {
     fn as_end_tag(&self) -> Option<FFIValue> {
         if let Event::End(tag) = self.event.clone() {
             Some(
-                MarkdownEndTag { _tag: tag, _source: self.source.clone() }
+                MarkdownEndTag {
+                    _tag: tag,
+                    _source: self.source.clone(),
+                }
                 .into_ffi_val()
                 .unwrap(),
             )

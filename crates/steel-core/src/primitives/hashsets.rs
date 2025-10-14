@@ -1,11 +1,11 @@
+use crate::collections::persistent::{HashSet, Vector};
 use crate::rvals::SteelHashSet;
 use crate::rvals::{Result, SteelVal};
 use crate::steel_vm::vm::VmCore;
+use crate::stop;
 #[cfg(feature = "std")]
 use crate::values::lists::List;
-use crate::collections::persistent::{HashSet, Vector};
 use crate::{gc::Gc, steel_vm::builtin::BuiltInModule};
-use crate::stop;
 
 pub(crate) fn hashset_module() -> BuiltInModule {
     let mut module = BuiltInModule::new("steel/sets");

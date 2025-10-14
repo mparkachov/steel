@@ -2378,7 +2378,7 @@ impl EngineBuilder {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod engine_api_tests {
     use crate::custom_reference;
 
@@ -2477,7 +2477,7 @@ mod engine_api_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod engine_sandbox_tests {
     use super::*;
 
@@ -2491,7 +2491,7 @@ mod engine_sandbox_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod derive_macro_tests {
     use super::*;
 
@@ -2565,16 +2565,21 @@ mod derive_macro_tests {
     }
 }
 
-#[test]
-fn test_steel_quote_macro() {
-    let foobarbaz = ExprKind::atom("foo");
-    let foobarbaz_list = ExprKind::List(List::new(vec![ExprKind::atom("foo")]));
+#[cfg(all(test, feature = "std"))]
+mod steel_quote_tests {
+    use super::*;
 
-    let expanded = steel_derive::internal_steel_quote! {
-        (define bananas #foobarbaz)
-        (define x (begin @foobarbaz_list ...))
+    #[test]
+    fn test_steel_quote_macro() {
+        let foobarbaz = ExprKind::atom("foo");
+        let foobarbaz_list = ExprKind::List(List::new(vec![ExprKind::atom("foo")]));
+
+        let expanded = steel_derive::internal_steel_quote! {
+            (define bananas #foobarbaz)
+            (define x (begin @foobarbaz_list ...))
+        }
+        .unwrap();
+
+        println!("{}", expanded);
     }
-    .unwrap();
-
-    println!("{}", expanded);
 }

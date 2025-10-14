@@ -82,7 +82,9 @@ fn find_wasm_test_artifact() -> Result<PathBuf, Box<dyn Error>> {
             }
         }
     }
-    if let Some((path, _)) = newest { return Ok(path); }
+    if let Some((path, _)) = newest {
+        return Ok(path);
+    }
     Err("could not locate no_std_suite wasm artifact in target".into())
 }
 
@@ -114,6 +116,8 @@ pub fn no_std_thumb_test() -> Result<(), Box<dyn Error>> {
         return Err("no_std tests (thumbv7em) build failed".into());
     }
 
-    println!("Note: running on thumb requires a hardware/emulator runner; this step only compiles.");
+    println!(
+        "Note: running on thumb requires a hardware/emulator runner; this step only compiles."
+    );
     Ok(())
 }

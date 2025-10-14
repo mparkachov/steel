@@ -49,7 +49,8 @@ pub mod collections {
 
         pub type VectorConsumingIter<T> = imbl::vector::ConsumingIter<T, DefaultSharedPtr>;
         pub type HashSetConsumingIter<T> = imbl::hashset::ConsumingIter<T, DefaultSharedPtr>;
-        pub type HashMapConsumingIter<K, V> = imbl::hashmap::ConsumingIter<(K, V), DefaultSharedPtr>;
+        pub type HashMapConsumingIter<K, V> =
+            imbl::hashmap::ConsumingIter<(K, V), DefaultSharedPtr>;
     }
 
     #[cfg(not(feature = "std"))]
@@ -59,8 +60,7 @@ pub mod collections {
 
         pub type HashMap<K, V, S = crate::minimal::DefaultHashBuilder> =
             crate::minimal::HashMap<K, V, S>;
-        pub type HashSet<K, S = crate::minimal::DefaultHashBuilder> =
-            crate::minimal::HashSet<K, S>;
+        pub type HashSet<K, S = crate::minimal::DefaultHashBuilder> = crate::minimal::HashSet<K, S>;
 
         pub type HashSetConsumingIter<T> = crate::minimal::HashSetConsumingIter<T>;
         pub type HashMapConsumingIter<K, V> = crate::minimal::HashMapConsumingIter<K, V>;
@@ -110,7 +110,7 @@ pub mod parser;
 #[cfg(any(feature = "std", feature = "no_std_steel_vm"))]
 pub mod steel_vm;
 
-#[cfg(all(any(feature = "std", feature = "no_std_values"), test))]
+#[cfg(all(feature = "std", test))]
 mod tests;
 
 #[cfg(feature = "std")]
@@ -131,8 +131,8 @@ pub use minimal::SteelVal;
 #[cfg(feature = "std")]
 pub use rvals::SteelVal;
 
-pub use collections::{HashMap, HashSet};
 pub use collections::persistent::Vector;
+pub use collections::{HashMap, HashSet};
 pub use lists::List;
 
 #[cfg(any(feature = "std", feature = "no_std_primitives"))]

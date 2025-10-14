@@ -206,11 +206,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             match target.as_deref() {
                 Some("wasm") => {
                     let extra: Vec<String> = args.collect();
-                    let runner_args: Vec<String> = if extra.first().map(|s| s == "--").unwrap_or(false) {
-                        extra.into_iter().skip(1).collect()
-                    } else {
-                        extra
-                    };
+                    let runner_args: Vec<String> =
+                        if extra.first().map(|s| s == "--").unwrap_or(false) {
+                            extra.into_iter().skip(1).collect()
+                        } else {
+                            extra
+                        };
                     test::no_std_wasm_test(&runner_args)?
                 }
                 Some("thumb") => test::no_std_thumb_test()?,

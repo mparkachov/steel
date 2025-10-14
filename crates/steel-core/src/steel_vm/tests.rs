@@ -1,4 +1,4 @@
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod call_cc_tests {
     use crate::steel_vm::engine::Engine;
     use crate::steel_vm::register_fn::RegisterFn;
@@ -116,7 +116,7 @@ mod call_cc_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod register_fn_tests {
     use crate::steel_vm::engine::Engine;
     use crate::steel_vm::register_fn::RegisterFn;
@@ -200,7 +200,7 @@ mod register_fn_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod register_type_tests {
     use crate::steel_vm::engine::Engine;
     use crate::steel_vm::register_fn::RegisterFn;
@@ -284,7 +284,7 @@ mod register_type_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod contract_tests {
     use crate::steel_vm::test_util::{assert_script, assert_script_error};
 
@@ -577,7 +577,7 @@ mod contract_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod find_closest_match_tests {
     use crate::steel_vm::builtin::find_closest_match;
 

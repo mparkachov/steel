@@ -8,8 +8,8 @@ use crate::gc::shared::{MappedScopedReadContainer, MutContainer, ScopedReadConta
 #[cfg(not(feature = "sync"))]
 use crate::gc::shared::ShareableMut;
 
-use crate::gc::{Shared, SharedMut};
 use crate::collections::HashMap;
+use crate::gc::{Shared, SharedMut};
 use crate::{
     containers::RegisterValue,
     gc::Gc,

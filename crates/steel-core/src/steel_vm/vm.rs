@@ -185,21 +185,25 @@ impl PartialEq for StackFrame {
     }
 }
 
-#[test]
-fn check_sizes() {
-    println!("stack frame: {:?}", std::mem::size_of::<StackFrame>());
-    println!(
-        "option rc steelval: {:?}",
-        std::mem::size_of::<Option<std::rc::Rc<SteelVal>>>()
-    );
-    println!(
-        "option box steelval: {:?}",
-        std::mem::size_of::<Option<Box<SteelVal>>>()
-    );
-    println!(
-        "option steelval: {:?}",
-        std::mem::size_of::<Option<SteelVal>>()
-    );
+#[cfg(all(test, feature = "std"))]
+mod vm_tests {
+    use super::*;
+    use std::mem;
+    use std::rc::Rc;
+
+    #[test]
+    fn check_sizes() {
+        println!("stack frame: {:?}", mem::size_of::<StackFrame>());
+        println!(
+            "option rc steelval: {:?}",
+            mem::size_of::<Option<Rc<SteelVal>>>()
+        );
+        println!(
+            "option box steelval: {:?}",
+            mem::size_of::<Option<Box<SteelVal>>>()
+        );
+        println!("option steelval: {:?}", mem::size_of::<Option<SteelVal>>());
+    }
 }
 
 thread_local! {

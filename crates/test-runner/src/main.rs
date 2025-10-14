@@ -75,7 +75,9 @@ fn read_env_overrides(cli: &mut Cli) {
 
 fn format_duration(seconds: f64) -> String {
     let safe = if seconds.is_finite() { seconds } else { 0.0 };
-    format!("[{:.3}s]", safe).replace('[', "[ ").replace('s', "s ")
+    format!("[{:.3}s]", safe)
+        .replace('[', "[ ")
+        .replace('s', "s ")
 }
 
 fn escape_xml(s: &str) -> String {
@@ -93,7 +95,10 @@ fn escape_xml(s: &str) -> String {
 
 fn write_junit_report(path: &PathBuf, suite_name: &str, cases: &[TestCaseResult]) -> Result<()> {
     let total = cases.len();
-    let failures = cases.iter().filter(|c| c.status == TestStatus::Fail).count();
+    let failures = cases
+        .iter()
+        .filter(|c| c.status == TestStatus::Fail)
+        .count();
     let time: f64 = cases.iter().map(|c| c.duration).sum();
 
     let mut out = String::new();
@@ -295,21 +300,28 @@ fn main() -> Result<()> {
                 let dur = t0.elapsed().as_secs_f64();
                 let line = format!(
                     "{} {} {} {}",
-                    if status == TestStatus::Pass { "PASS" } else { "FAIL" },
+                    if status == TestStatus::Pass {
+                        "PASS"
+                    } else {
+                        "FAIL"
+                    },
                     format_duration(dur),
                     display_name_cloned,
                     test_name
                 );
                 println!("{}", line);
 
-                let _ = tx.send((i, TestCaseResult {
-                    name: test_name,
-                    class_name: suite_name_cloned.clone(),
-                    duration: dur,
-                    status,
-                    error_message: error_msg,
-                    error_details,
-                }));
+                let _ = tx.send((
+                    i,
+                    TestCaseResult {
+                        name: test_name,
+                        class_name: suite_name_cloned.clone(),
+                        duration: dur,
+                        status,
+                        error_message: error_msg,
+                        error_details,
+                    },
+                ));
             }
         });
     }
@@ -327,7 +339,12 @@ fn main() -> Result<()> {
     let elapsed = start_all.elapsed().as_secs_f64();
     let passed = total - failed;
     println!("");
-    println!("Summary {} {} passed; {} failed", format_duration(elapsed), passed, failed);
+    println!(
+        "Summary {} {} passed; {} failed",
+        format_duration(elapsed),
+        passed,
+        failed
+    );
 
     if failed > 0 {
         eprintln!("");
@@ -368,5 +385,9 @@ fn guess_suite_name(path: &PathBuf) -> String {
         .next()
         .map(|s| s.to_string())
         .unwrap_or(file);
-    if trimmed.is_empty() { "wasm-tests".to_string() } else { trimmed }
+    if trimmed.is_empty() {
+        "wasm-tests".to_string()
+    } else {
+        trimmed
+    }
 }

@@ -1,5 +1,7 @@
 pub mod cycles;
 
+#[cfg(feature = "sync")]
+use crate::steel_vm::vm::ContinuationMark;
 use crate::{
     gc::{
         shared::{
@@ -17,9 +19,7 @@ use crate::{
     },
     primitives::numbers::realp,
     rerrs::{ErrorKind, SteelErr},
-    steel_vm::vm::{
-        threads::closure_into_serializable, BuiltInSignature, Continuation,
-    },
+    steel_vm::vm::{threads::closure_into_serializable, BuiltInSignature, Continuation},
     values::{
         closed::{Heap, HeapRef, MarkAndSweepContext},
         functions::{BoxedDynFunction, ByteCodeLambda},
@@ -31,8 +31,6 @@ use crate::{
     },
 };
 use std::vec::IntoIter;
-#[cfg(feature = "sync")]
-use crate::steel_vm::vm::ContinuationMark;
 use std::{
     any::{Any, TypeId},
     cell::RefCell,

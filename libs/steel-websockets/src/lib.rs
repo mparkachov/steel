@@ -68,7 +68,9 @@ impl WebSocketMessage {
     }
 }
 
-struct WebSocketResponse { _inner: Response }
+struct WebSocketResponse {
+    _inner: Response,
+}
 impl Custom for WebSocketResponse {}
 
 #[derive(Debug)]

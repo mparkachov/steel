@@ -1,3 +1,5 @@
+#![cfg(feature = "std")]
+
 mod helpers;
 extern crate steel;
 

@@ -1,5 +1,5 @@
-use core::{cell::Cell, fmt};
 use core::mem;
+use core::{cell::Cell, fmt};
 
 use alloc::collections::VecDeque;
 
@@ -113,7 +113,6 @@ impl PointerFamily for GcPointerType {
 
 #[cfg(not(feature = "without-drop-protection"))]
 mod list_drop_handler {
-
 
     use super::*;
 

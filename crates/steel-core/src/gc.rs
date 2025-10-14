@@ -667,6 +667,7 @@ pub mod unsafe_erased_pointers {
     use std::sync::Arc;
     use std::{any::Any, cell::RefCell, marker::PhantomData};
 
+    use crate::collections::HashMap;
     use crate::gc::shared::{
         MappedScopedReadContainer, MappedScopedWriteContainer, ScopedReadContainer,
         ScopedWriteContainer, StandardSharedMut,
@@ -674,7 +675,6 @@ pub mod unsafe_erased_pointers {
     use crate::steel_vm::engine::EngineId;
     use once_cell::sync::Lazy;
     use parking_lot::Mutex;
-    use crate::collections::HashMap;
 
     use crate::rvals::cycles::IterativeDropHandler;
     use crate::rvals::{AsRefSteelValFromRef, MaybeSendSyncStatic};

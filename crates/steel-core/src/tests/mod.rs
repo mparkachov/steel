@@ -1,3 +1,5 @@
+#![cfg(feature = "std")]
+
 use std::borrow::Cow;
 
 use crate::steel_vm::engine::Engine;

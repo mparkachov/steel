@@ -140,7 +140,11 @@ fn u24_roundtrip() {
 
 #[cfg(all(not(feature = "std"), test))]
 fn disassemble_contains_opcode() {
-    let instrs = vec![Instruction::new_from_parts(OpCode::ADD, u24::from_u32(2), None)];
+    let instrs = vec![Instruction::new_from_parts(
+        OpCode::ADD,
+        u24::from_u32(2),
+        None,
+    )];
     let text = disassemble(&instrs);
     assert!(text.contains("ADD"));
     assert!(text.contains("2"));
@@ -185,7 +189,9 @@ pub extern "C" fn test_count() -> i32 {
 pub extern "C" fn test_name_ptr(i: i32) -> *const u8 {
     let i = i as usize;
     let table = named();
-    if i >= table.len() { return null(); }
+    if i >= table.len() {
+        return null();
+    }
     table[i].0.as_ptr()
 }
 
@@ -194,7 +200,9 @@ pub extern "C" fn test_name_ptr(i: i32) -> *const u8 {
 pub extern "C" fn test_name_len(i: i32) -> i32 {
     let i = i as usize;
     let table = named();
-    if i >= table.len() { return 0; }
+    if i >= table.len() {
+        return 0;
+    }
     table[i].0.len() as i32
 }
 
