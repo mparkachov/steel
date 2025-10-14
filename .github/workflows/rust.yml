@@ -61,12 +61,28 @@ jobs:
           cd cogs/
           cargo run -- install.scm
 
-      - uses: actions-rs/cargo@v1
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Run tests with nextest
         env:
           STEEL_HOME: ${{ env.STEEL_HOME }}
+        run: cargo nextest run --workspace --profile ci --junit-output target/nextest/ci/junit.xml
+
+      - name: Run doc tests
+        env:
+          STEEL_HOME: ${{ env.STEEL_HOME }}
+        run: cargo test --doc --workspace
+
+      - name: Upload nextest report
+        if: always()
+        uses: actions/upload-artifact@v3
         with:
-          command: test
-          args: --all
+          name: junit-test-results
+          path: target/nextest/ci/junit.xml
+          if-no-files-found: warn
 
       - name: install cargo-tarpaulin
         run: cargo install cargo-tarpaulin --force
@@ -133,12 +149,28 @@ jobs:
           cd cogs/
           cargo run -- install.scm
 
-      - uses: actions-rs/cargo@v1
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Run tests with nextest
         env:
           STEEL_HOME: ${{ env.STEEL_HOME }}
+        run: cargo nextest run --workspace --profile ci --junit-output target/nextest/ci/junit.xml
+
+      - name: Run doc tests
+        env:
+          STEEL_HOME: ${{ env.STEEL_HOME }}
+        run: cargo test --doc --workspace
+
+      - name: Upload nextest report
+        if: always()
+        uses: actions/upload-artifact@v3
         with:
-          command: test
-          args: --all
+          name: junit-test-results-${{ matrix.os.arch }}
+          path: target/nextest/ci/junit.xml
+          if-no-files-found: warn
 
       - name: Install shared libraries
         env:
@@ -202,4 +234,3 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
-
