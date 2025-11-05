@@ -1,12 +1,14 @@
-use std::{
-    collections::{hash_map, HashMap, HashSet},
-    hash::BuildHasherDefault,
-};
+use crate::collections::{MutableHashMap as HashMap, MutableHashSet as HashSet};
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
+use alloc::{boxed::Box, format};
+use core::hash::BuildHasherDefault;
 
 use crate::{
+    collections::HashMap as ImmutableHashMap,
     compiler::modules::{MANGLER_PREFIX, MODULE_PREFIX},
     parser::ast::List,
-    values::HashMap as ImmutableHashMap,
 };
 use quickscope::ScopeMap;
 use smallvec::SmallVec;
@@ -33,13 +35,16 @@ use crate::{
         span_visitor::get_span,
         tokens::TokenType,
     },
-    steel_vm::primitives::{builtin_to_reserved, MODULE_IDENTIFIERS},
+    steel_vm::primitives::{builtin_to_reserved, module_identifier_contains},
     stop, throw, SteelErr, SteelVal,
 };
 
 use super::{VisitorMutControlFlow, VisitorMutRefUnit, VisitorMutUnitRef};
 
 use fxhash::{FxBuildHasher, FxHashMap, FxHashSet, FxHasher};
+
+#[cfg(feature = "profiling")]
+use crate::time::Instant;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum IdentifierStatus {
@@ -80,9 +85,10 @@ pub struct SemanticInformation {
     pub is_required_identifier: bool,
 }
 
+#[cfg(all(test, feature = "std"))]
 #[test]
 fn check_size_of_info() {
-    println!("{}", std::mem::size_of::<SemanticInformation>());
+    println!("{}", core::mem::size_of::<SemanticInformation>());
 }
 
 impl SemanticInformation {
@@ -311,10 +317,10 @@ pub struct Analysis {
 impl Analysis {
     pub fn pre_allocated() -> Self {
         Analysis {
-            info: HashMap::with_capacity_and_hasher(3584, FxBuildHasher::default()),
-            function_info: HashMap::with_capacity_and_hasher(128, FxBuildHasher::default()),
-            call_info: HashMap::with_capacity_and_hasher(128, FxBuildHasher::default()),
-            let_info: HashMap::with_capacity_and_hasher(128, FxBuildHasher::default()),
+            info: FxHashMap::with_capacity_and_hasher(3584, FxBuildHasher::default()),
+            function_info: FxHashMap::with_capacity_and_hasher(128, FxBuildHasher::default()),
+            call_info: FxHashMap::with_capacity_and_hasher(128, FxBuildHasher::default()),
+            let_info: FxHashMap::with_capacity_and_hasher(128, FxBuildHasher::default()),
             scope: ScopeMap::default(),
         }
     }
@@ -357,7 +363,7 @@ impl Analysis {
         self.clear();
 
         #[cfg(feature = "profiling")]
-        let now = std::time::Instant::now();
+        let now = Instant::now();
 
         self.run(exprs);
 
@@ -369,10 +375,10 @@ impl Analysis {
         // let mut analysis = Analysis::default();
 
         let mut analysis = Analysis {
-            info: HashMap::with_capacity_and_hasher(3584, FxBuildHasher::default()),
-            function_info: HashMap::with_capacity_and_hasher(128, FxBuildHasher::default()),
-            call_info: HashMap::with_capacity_and_hasher(128, FxBuildHasher::default()),
-            let_info: HashMap::with_capacity_and_hasher(128, FxBuildHasher::default()),
+            info: FxHashMap::with_capacity_and_hasher(3584, FxBuildHasher::default()),
+            function_info: FxHashMap::with_capacity_and_hasher(128, FxBuildHasher::default()),
+            call_info: FxHashMap::with_capacity_and_hasher(128, FxBuildHasher::default()),
+            let_info: FxHashMap::with_capacity_and_hasher(128, FxBuildHasher::default()),
             scope: ScopeMap::default(),
         };
 
@@ -1416,14 +1422,17 @@ impl<'a> VisitorMutUnitRef<'a> for AnalysisPass<'a> {
         //     self.info.get_mut(&id).unwrap().last_usage = true;
         // }
 
-        if let hash_map::Entry::Vacant(e) = self.info.let_info.entry(l.syntax_object_id) {
-            e.insert(LetInformation::new(
-                // self.stack_offset,
-                rollback_offset,
-                self.function_context,
-                arguments,
-            ));
-        }
+        self.info
+            .let_info
+            .entry(l.syntax_object_id)
+            .or_insert_with(|| {
+                LetInformation::new(
+                    // self.stack_offset,
+                    rollback_offset,
+                    self.function_context,
+                    arguments,
+                )
+            });
 
         if is_top_level {
             self.info.scope.pop_layer();
@@ -1587,9 +1596,9 @@ impl<'a> VisitorMutUnitRef<'a> for AnalysisPass<'a> {
         let let_level_bindings = if let Some(b) = let_level_bindings {
             b
         } else {
-            eprintln!("unknown arg found: {}", lambda_function);
+            log::debug!("unknown arg found: {}", lambda_function);
             for arg in &lambda_function.args {
-                eprintln!("{} - {}", arg.atom_identifier().is_some(), arg);
+                log::debug!("{} - {}", arg.atom_identifier().is_some(), arg);
             }
             panic!()
         };
@@ -1801,9 +1810,9 @@ impl<'a> VisitorMutUnitRef<'a> for AnalysisPass<'a> {
                     // TODO: We _really_ should be providing the built-ins in a better way thats not
                     // passing around a thread local
 
-                    if crate::steel_vm::primitives::PRELUDE_INTERNED_STRINGS
-                        .with(|x| x.contains(ident))
-                    {
+                    if crate::steel_vm::primitives::with_prelude_interned_strings(|x| {
+                        x.contains(ident)
+                    }) {
                         semantic_information.mark_builtin()
                     }
 
@@ -2031,7 +2040,7 @@ impl<'a> VisitorMutUnitRef<'a> for AnalysisPass<'a> {
                 // TODO: We _really_ should be providing the built-ins in a better way thats not
                 // passing around a thread local
                 // if crate::steel_vm::primitives::PRELUDE_MODULE.with(|x| x.contains(ident.resolve()))
-                if crate::steel_vm::primitives::PRELUDE_INTERNED_STRINGS.with(|x| x.contains(ident))
+                if crate::steel_vm::primitives::with_prelude_interned_strings(|x| x.contains(ident))
                 {
                     semantic_info.mark_builtin();
                     semantic_info.kind = IdentifierStatus::Global
@@ -2678,7 +2687,7 @@ pub(crate) fn is_a_builtin_definition(def: &Define) -> bool {
         match l.first_ident() {
             Some(func) if *func == *UNREADABLE_MODULE_GET || *func == *STANDARD_MODULE_GET => {
                 if let Some(module) = l.second_ident() {
-                    return MODULE_IDENTIFIERS.contains(module);
+                    return module_identifier_contains(module);
                 }
             }
             _ => {}
@@ -2785,7 +2794,10 @@ impl<'a> VisitorMutRefUnit for RemovedUnusedImports<'a> {
             let argument_count = l.args.len() - 1;
             if let Some(func) = l.first_func() {
                 if argument_count != func.args.len() {
-                    println!("-- Static arity mismatch -- Should actually error here");
+                    #[cfg(feature = "std")]
+                    {
+                        println!("-- Static arity mismatch -- Should actually error here");
+                    }
                 } else {
                     unused_arguments = func
                         .args
@@ -3132,14 +3144,14 @@ impl<'a> VisitorMutRefUnit for LiftPureFunctionsToGlobalScope<'a> {
                             // with the right thing
 
                             // Name the closure something mangled, but something we can refer to later
-                            let constructed_name = "##__lifted_pure_function".to_string()
-                                + l.syntax_object_id.to_string().as_ref();
+                            let constructed_name =
+                                format!("##__lifted_pure_function{}", l.syntax_object_id);
 
                             // Point the reference to a dummy list - this is just an ephemeral placeholder
                             let mut dummy = ExprKind::List(List::new(Vec::new()));
 
                             // Have the lambda now actually point to this dummy list
-                            std::mem::swap(lambda, &mut dummy);
+                            core::mem::swap(lambda, &mut dummy);
 
                             // Construct the global definition, this is something like
                             //
@@ -3305,7 +3317,7 @@ impl<'a> VisitorMutRefUnit for ReplaceSetOperationsWithBoxes<'a> {
                 if let Some(analysis) = self.analysis.get(&a.syn) {
                     if analysis.kind == IdentifierStatus::HeapAllocated {
                         let mut dummy = ExprKind::List(List::new(Vec::new()));
-                        std::mem::swap(&mut dummy, expr);
+                        core::mem::swap(&mut dummy, expr);
 
                         *expr = unbox_argument(dummy);
                     }
@@ -3327,10 +3339,10 @@ impl<'a> VisitorMutRefUnit for ReplaceSetOperationsWithBoxes<'a> {
                 self.visit(&mut s.expr);
 
                 let mut set_expr = ExprKind::List(List::new(Vec::new()));
-                std::mem::swap(&mut s.expr, &mut set_expr);
+                core::mem::swap(&mut s.expr, &mut set_expr);
 
                 let mut dummy_ident = ExprKind::List(List::new(Vec::new()));
-                std::mem::swap(&mut dummy_ident, &mut s.variable);
+                core::mem::swap(&mut dummy_ident, &mut s.variable);
 
                 let new_set_expr = setbox_argument(dummy_ident, set_expr);
 
@@ -3372,7 +3384,7 @@ impl<'a> VisitorMutRefUnit for ReplaceSetOperationsWithBoxes<'a> {
             if !mutable_variables.is_empty() {
                 // let mut body = ExprKind::List(List::new(Vec::new()));
 
-                // std::mem::swap(&mut lambda_function.body, &mut body);
+                // core::mem::swap(&mut lambda_function.body, &mut body);
 
                 // let wrapped_lambda = LambdaFunction::new(
                 //     mutable_variables.clone(),
@@ -3395,7 +3407,7 @@ impl<'a> VisitorMutRefUnit for ReplaceSetOperationsWithBoxes<'a> {
                         .into_iter()
                         .zip(mutable_variables.into_iter().map(box_argument))
                         .collect(),
-                    std::mem::take(&mut l.body_expr),
+                    core::mem::take(&mut l.body_expr),
                     l.location.clone(),
                 );
 
@@ -3433,7 +3445,7 @@ impl<'a> VisitorMutRefUnit for ReplaceSetOperationsWithBoxes<'a> {
             if !mutable_variables.is_empty() {
                 let mut body = ExprKind::List(List::new(Vec::new()));
 
-                std::mem::swap(&mut lambda_function.body, &mut body);
+                core::mem::swap(&mut lambda_function.body, &mut body);
 
                 let wrapped_lambda = LambdaFunction::new(
                     mutable_variables.clone(),
@@ -3537,7 +3549,7 @@ impl<'a> VisitorMutRefUnit for LiftLocallyDefinedFunctions<'a> {
 
         for (index, _name, _id) in functions.into_iter().rev() {
             // let constructed_name =
-            //     "##lambda-lifting##".to_string() + &name + id.0.to_string().as_str();
+            //     "##lambda-lifting##".into() + &name + id.0.to_string().as_str();
 
             // let mut dummy_define = ExprKind::Define(Box::new(Define::new(
             //     ExprKind::atom(name),
@@ -3547,7 +3559,7 @@ impl<'a> VisitorMutRefUnit for LiftLocallyDefinedFunctions<'a> {
 
             // let mut removed_function = begin.exprs.get_mut(index).unwrap();
 
-            // std::mem::swap(&mut dummy_define, &mut removed_function);
+            // core::mem::swap(&mut dummy_define, &mut removed_function);
 
             let removed_function = begin.exprs.remove(index);
             self.lifted_functions.push(removed_function);
@@ -3595,7 +3607,7 @@ impl<'a> VisitorMutRefUnit for ReplaceBuiltinUsagesInsideMacros<'a> {
         if let Some(ident) = a.ident_mut() {
             if self.identifiers_to_replace.contains(ident) {
                 if let Some((_, builtin_name)) = ident.resolve().split_once(MANGLER_SEPARATOR) {
-                    // *ident = ("#%prim.".to_string() + builtin_name).into();
+                    // *ident = ("#%prim.".into() + builtin_name).into();
 
                     *ident = builtin_to_reserved(builtin_name);
                     self.changed = true;
@@ -3663,7 +3675,7 @@ impl<'a> VisitorMutRefUnit for ReplaceBuiltinUsagesWithReservedPrimitiveReferenc
 
                         self.identifiers_to_replace.insert(*ident);
 
-                        // *ident = ("#%prim.".to_string() + builtin_name).into();
+                        // *ident = ("#%prim.".into() + builtin_name).into();
 
                         *ident = builtin_to_reserved(builtin_name);
 
@@ -3694,7 +3706,7 @@ impl<'a> VisitorMutRefUnit for ReplaceBuiltinUsagesWithReservedPrimitiveReferenc
 
                                     self.identifiers_to_replace.insert(*ident);
 
-                                    // *ident = ("#%prim.".to_string() + builtin_name).into();
+                                    // *ident = ("#%prim.".into() + builtin_name).into();
                                     *ident = builtin_to_reserved(builtin_name);
 
                                     // println!("MUTATED IDENT TO BE: {} -> {}", original, ident);
@@ -3723,20 +3735,20 @@ impl<'a> ExprContainsIds<'a> {
     ) -> bool {
         matches!(
             ExprContainsIds { analysis, ids }.visit(expr),
-            std::ops::ControlFlow::Break(_)
+            core::ops::ControlFlow::Break(_)
         )
     }
 }
 
 impl<'a> VisitorMutControlFlow for ExprContainsIds<'a> {
-    fn visit_atom(&mut self, a: &Atom) -> std::ops::ControlFlow<()> {
+    fn visit_atom(&mut self, a: &Atom) -> core::ops::ControlFlow<()> {
         if let Some(refers_to) = self.analysis.get(&a.syn).and_then(|x| x.refers_to) {
             if self.ids.contains(&refers_to) {
-                return std::ops::ControlFlow::Break(());
+                return core::ops::ControlFlow::Break(());
             }
         }
 
-        std::ops::ControlFlow::Continue(())
+        core::ops::ControlFlow::Continue(())
     }
 }
 
@@ -3767,7 +3779,7 @@ impl VisitorMutRefUnit for FlattenEmptyLets {
             ExprKind::Require(r) => self.visit_require(r),
             ExprKind::Let(l) => {
                 if l.bindings.is_empty() {
-                    *expr = std::mem::replace(&mut l.body_expr, ExprKind::empty());
+                    *expr = core::mem::replace(&mut l.body_expr, ExprKind::empty());
                     self.visit(expr)
                 } else {
                     self.visit(&mut l.body_expr)
@@ -3823,7 +3835,7 @@ impl<'a> VisitorMutRefUnit for FlattenAnonymousFunctionCalls<'a> {
                             let mut dummy = ExprKind::empty();
 
                             // Extract the inner body
-                            std::mem::swap(&mut function_b.body, &mut dummy);
+                            core::mem::swap(&mut function_b.body, &mut dummy);
 
                             inner_body = Some(dummy);
 
@@ -4230,7 +4242,7 @@ impl<'a> SemanticAnalysis<'a> {
         // otherwise annontate them with the fact that they are multi arity. Then we're going
         // to walk through and update the call information with the arity, assuming
         // the arity matches appropriately.
-        let mut map: HashMap<InternedString, usize> = HashMap::new();
+        let mut map: HashMap<InternedString, usize> = HashMap::default();
 
         for expr in self.exprs.iter() {
             match expr {
@@ -4300,7 +4312,8 @@ impl<'a> SemanticAnalysis<'a> {
         let threshold = size.unwrap_or(50);
 
         // Only do this for functions in which the arity is exactly known
-        let mut funcs: HashMap<InternedString, Box<dyn Fn(&Analysis, &mut List)>> = HashMap::new();
+        let mut funcs: HashMap<InternedString, Box<dyn Fn(&Analysis, &mut List)>> =
+            HashMap::default();
 
         // Only inline forwards, as to not run in to any issues with visibility
         for expr in self.exprs.iter() {
@@ -4483,7 +4496,7 @@ impl<'a> SemanticAnalysis<'a> {
         table: &mut FxHashSet<InternedString>,
     ) -> &mut Self {
         #[cfg(feature = "profiling")]
-        let now = std::time::Instant::now();
+        let now = Instant::now();
 
         let mut replacer =
             ReplaceBuiltinUsagesWithReservedPrimitiveReferences::new(&self.analysis, table);
@@ -4521,7 +4534,8 @@ impl<'a> SemanticAnalysis<'a> {
         // Delay mangling the module unless we have to
         if should_mangle {
             for module in module_manager.modules_mut().iter_mut() {
-                for steel_macro in std::sync::Arc::make_mut(&mut module.1.macro_map).values_mut() {
+                for steel_macro in alloc::sync::Arc::make_mut(&mut module.1.macro_map).values_mut()
+                {
                     if !steel_macro.is_mangled() {
                         for expr in steel_macro.exprs_mut() {
                             macro_replacer.visit(expr);
@@ -4559,7 +4573,7 @@ impl<'a> SemanticAnalysis<'a> {
         module_manager: &ModuleManager,
     ) -> &mut Self {
         #[cfg(feature = "profiling")]
-        let now = std::time::Instant::now();
+        let now = Instant::now();
 
         let module_get_interned: InternedString = "%module-get%".into();
         let proto_hash_get: InternedString = "%proto-hash-get%".into();
@@ -4798,7 +4812,7 @@ impl<'a> SemanticAnalysis<'a> {
             if let ExprKind::Let(l) = anon {
                 if l.bindings.is_empty() {
                     let mut dummy = ExprKind::List(List::new(Vec::new()));
-                    std::mem::swap(&mut l.body_expr, &mut dummy);
+                    core::mem::swap(&mut l.body_expr, &mut dummy);
                     *anon = dummy;
 
                     re_run_analysis = true;
@@ -4877,7 +4891,7 @@ impl<'a> SemanticAnalysis<'a> {
                         if f.args.is_empty() && arg_count == 0 {
                             // Take out the body of the function - we're going to want to use that now
                             let mut dummy = ExprKind::List(List::new(Vec::new()));
-                            std::mem::swap(&mut f.body, &mut dummy);
+                            core::mem::swap(&mut f.body, &mut dummy);
                             *anon = dummy;
 
                             re_run_analysis = true;
@@ -4910,7 +4924,7 @@ impl<'a> SemanticAnalysis<'a> {
 
     pub fn replace_anonymous_function_calls_with_plain_lets(&mut self) -> &mut Self {
         #[cfg(feature = "profiling")]
-        let now = std::time::Instant::now();
+        let now = Instant::now();
 
         let mut re_run_analysis = false;
 
@@ -4932,12 +4946,12 @@ impl<'a> SemanticAnalysis<'a> {
 
                 if let ExprKind::LambdaFunction(mut f) = function {
                     let mut function_body = ExprKind::List(List::new(Vec::new()));
-                    std::mem::swap(&mut f.body, &mut function_body);
+                    core::mem::swap(&mut f.body, &mut function_body);
 
                     let let_expr = Let::new(
                         f.args
                             .into_iter()
-                            .zip(std::mem::take(&mut l.args))
+                            .zip(core::mem::take(&mut l.args))
                             .map(|x| (x.0, x.1))
                             .collect(),
                         function_body,
@@ -5248,7 +5262,7 @@ impl<'a> SemanticAnalysis<'a> {
 
     pub fn check_if_values_are_redefined(&mut self) -> Result<&mut Self, SteelErr> {
         // TODO: Maybe reuse this memory somehow?
-        let mut non_builtin_definitions = HashSet::new();
+        let mut non_builtin_definitions = HashSet::default();
 
         for expr in self.exprs.iter() {
             match expr {
@@ -5298,6 +5312,8 @@ impl<'a> SemanticAnalysis<'a> {
             }
         }
 
+        drop(non_builtin_definitions);
+
         Ok(self)
     }
 
@@ -5339,10 +5355,9 @@ impl<'a> SemanticAnalysis<'a> {
                 let mut find_call_site_by_id =
                     FindUsages::new(id, &self.analysis, |_: &Analysis, usage: &mut Atom| {
                         if let Some(ident) = usage.ident_mut() {
-                            *ident = ("##lambda-lifting##".to_string()
-                                + ident.resolve()
-                                + id.0.to_string().as_str())
-                            .into();
+                            let new_ident =
+                                format!("##lambda-lifting##{}{}", ident.resolve(), id.0);
+                            *ident = new_ident.into();
                             true
                         } else {
                             false
@@ -5366,10 +5381,8 @@ impl<'a> SemanticAnalysis<'a> {
                         }
 
                         if let Some(name) = define.name.atom_identifier_mut() {
-                            *name = ("##lambda-lifting##".to_string()
-                                + name.resolve()
-                                + id.0.to_string().as_str())
-                            .into();
+                            let new_name = format!("##lambda-lifting##{}{}", name.resolve(), id.0);
+                            *name = new_name.into();
                         } else {
                             unreachable!("This should explicitly be an identifier here - perhaps a macro was invalid?");
                         }
@@ -5453,7 +5466,7 @@ impl<'a> SemanticAnalysis<'a> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod analysis_pass_tests {
 
     use crate::{
@@ -5735,7 +5748,7 @@ mod analysis_pass_tests {
                 ErrorKind::FreeIdentifier.to_error_code(),
                 "input.rkt",
                 script,
-                "unused arguments".to_string(),
+                "unused arguments".into(),
                 var.1,
             );
         }
@@ -5926,7 +5939,7 @@ mod analysis_pass_tests {
                 ErrorKind::FreeIdentifier.to_error_code(),
                 "input.rkt",
                 script,
-                "Free identifier".to_string(),
+                "Free identifier".into(),
                 var.span,
             );
         }
@@ -6016,7 +6029,7 @@ mod analysis_pass_tests {
                 ErrorKind::FreeIdentifier.to_error_code(),
                 "input.rkt",
                 script,
-                "last usage".to_string(),
+                "last usage".into(),
                 var.span,
             );
         }
@@ -6065,7 +6078,7 @@ mod analysis_pass_tests {
                 ErrorKind::FreeIdentifier.to_error_code(),
                 "input.rkt",
                 script,
-                "let-var".to_string(),
+                "let-var".into(),
                 var.span,
             );
         }
@@ -6089,7 +6102,7 @@ mod analysis_pass_tests {
                 ErrorKind::FreeIdentifier.to_error_code(),
                 "input.rkt",
                 script,
-                "last usage".to_string(),
+                "last usage".into(),
                 var.span,
             );
         }
@@ -6135,7 +6148,7 @@ mod analysis_pass_tests {
                 ErrorKind::FreeIdentifier.to_error_code(),
                 "input.rkt",
                 script,
-                "let-var".to_string(),
+                "let-var".into(),
                 var.span,
             );
         }
@@ -6180,7 +6193,7 @@ mod analysis_pass_tests {
                 ErrorKind::FreeIdentifier.to_error_code(),
                 "input.rkt",
                 script,
-                "tail call".to_string(),
+                "tail call".into(),
                 var.span,
             );
         }
@@ -6220,7 +6233,7 @@ mod analysis_pass_tests {
                 ErrorKind::FreeIdentifier.to_error_code(),
                 "input.rkt",
                 script,
-                "tail call".to_string(),
+                "tail call".into(),
                 var.span,
             );
         }
@@ -6266,7 +6279,7 @@ mod analysis_pass_tests {
                 ErrorKind::FreeIdentifier.to_error_code(),
                 "input.rkt",
                 script,
-                "tail call".to_string(),
+                "tail call".into(),
                 var.span,
             );
         }
@@ -6305,7 +6318,7 @@ mod analysis_pass_tests {
                 ErrorKind::FreeIdentifier.to_error_code(),
                 "input.rkt",
                 script,
-                "tail call".to_string(),
+                "tail call".into(),
                 var.span,
             );
         }
@@ -6672,7 +6685,7 @@ mod analysis_pass_tests {
                     ErrorKind::FreeIdentifier.to_error_code(),
                     "input.rkt",
                     script,
-                    "Free identifier".to_string(),
+                    "Free identifier".into(),
                     var.span,
                 );
             }
@@ -6686,7 +6699,7 @@ mod analysis_pass_tests {
             //         ErrorKind::FreeIdentifier.to_error_code(),
             //         "input.rkt",
             //         script,
-            //         "Unused variable".to_string(),
+            //         "Unused variable".into(),
             //         var.span,
             //     );
             // }
@@ -6696,7 +6709,7 @@ mod analysis_pass_tests {
             //         ErrorKind::FreeIdentifier.to_error_code(),
             //         "input.rkt",
             //         script,
-            //         "global var".to_string(),
+            //         "global var".into(),
             //         var.span,
             //     );
             // }
@@ -6706,7 +6719,7 @@ mod analysis_pass_tests {
             //         ErrorKind::FreeIdentifier.to_error_code(),
             //         "input.rkt",
             //         script,
-            //         "last usage of variable".to_string(),
+            //         "last usage of variable".into(),
             //         var.span,
             //     );
             // }
